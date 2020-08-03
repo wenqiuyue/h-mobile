@@ -1,0 +1,581 @@
+<template>
+	<van-pull-refresh :class="classRoot" v-model="isLoading" @refresh="onRefresh">
+		<template v-if="!isLoading">
+			<div
+				:class="
+					`${classRoot}-background ${
+						mode === 'mother' ? '' : 'children_home_background'
+					}`
+				"
+			>
+				<div class="title" v-if="Site">
+					<div class="title_between" @click="siteChange">
+						<svg-icon value="icon-home_Hospital" :size="1.5" />
+						<span class="text">{{ Site['HospitalName'] }}</span>
+						<svg-icon
+							value="icon-home_BlackSwitching"
+							:size="0.75"
+							v-if="isChangeSite"
+						/>
+					</div>
+					<div class="title_between" @click="handleQrCode">
+						<svg-icon value="icon-home_QRcode" />
+						<span class="text">我的二维码</span>
+					</div>
+				</div>
+			</div>
+			<div :class="`${classRoot}-body`">
+				<CustomHeader
+					:userName="Archive ? Archive.Name : '未建档'"
+					:avatar="avatar"
+					:userInfo="userInfo"
+					:count-down-title="CountDownTitle"
+					:count-down="CountDown"
+					:data="Archive"
+					:avatarIcon="
+						mode === 'mother'
+							? 'icon-home_HeadDecoration'
+							: 'icon-babyHome_Headwear'
+					"
+				/>
+				<div class="top_select_panel">
+					<template v-if="Site">
+						<CustomSection
+							v-for="item in Site['Sections'].filter(
+								o => o['GroupType'] === 0 && o['SystemType'] === SystemType
+							)"
+							:key="item['SectionID']"
+							:data="item"
+							@onClick="handleSectionItemClick"
+						/>
+					</template>
+					<CustomMessage :data="Message" @click="handleRemind"></CustomMessage>
+					<template v-if="Site">
+						<CustomSection
+							v-for="item in Site['Sections'].filter(
+								o => o['GroupType'] === 10 && o['SystemType'] === SystemType
+							)"
+							:key="item['SectionID']"
+							:data="item"
+							@onClick="handleSectionItemClick"
+						/>
+					</template>
+				</div>
+				<template v-if="Site">
+					<CustomSection
+						v-for="item in Site['Sections'].filter(
+							o => o['GroupType'] === 20 && o['SystemType'] === SystemType
+						)"
+						:key="item['SectionID']"
+						:data="item"
+						@onClick="handleSectionItemClick"
+					/>
+				</template>
+			</div>
+		</template>
+		<SignIn ref="signIn" />
+		<van-popup
+			v-model="showQRCode"
+			position="bottom"
+			get-container="body"
+			closeable
+			:class="`${classRoot}-popup`"
+		>
+			<van-cell :style="{ background: cellbg }">
+				<template v-if="QRCode" slot="title">
+					<!-- <van-cell :title="`档案编号：${QRCode['ArchiveNo']}`" /> -->
+					<span class="title-archiveno" @click="myArchive">
+						<span class="custom-title"
+							>档案编号: {{ QRCode['ArchiveNo'] }}
+						</span>
+						<svg-icon value="icon-GoTo" :size="0.7" />
+					</span>
+				</template>
+			</van-cell>
+			<div :class="`${classRoot}-popup-body`">
+				<img id="barCode" />
+				<div id="qrCode" />
+			</div>
+			<div :class="`${classRoot}-popup-footer`">
+				<svg-icon value="icon-SignIn_notice" />
+				向医院提供二维码/条形码进行建档或签到
+			</div>
+		</van-popup>
+		<van-dialog
+			v-model="showSubscribe"
+			title="系统提示"
+			width="calc(90% - 1rem)"
+			:class="`${classRoot}-dialog`"
+			confirm-button-text="我知道了"
+			get-container="body"
+		>
+			<p>{{ subscribeTips }}</p>
+			<div ref="subscribe"></div>
+			<tips title="【长按识别二维码】" :size="1.25" />
+		</van-dialog>
+	</van-pull-refresh>
+</template>
+<script>
+import { mapState } from 'vuex';
+import { Dialog } from 'vant';
+import { getSession } from '../../commons/session';
+import types from '../../commons/types';
+import SignIn from '../modules/sign-in';
+import CustomHeader from './components/header-wite';
+import CustomMessage from './components/message';
+import CustomSection from './components/section';
+import * as UserApi from '../../apis/UserApi';
+import * as SiteApi from '../../apis/SiteApi';
+import * as QrCodeApi from '../../apis/QrCodeApi';
+import * as MessageApi from '../../apis/MessageApi';
+import * as ArchiveApi from '../../apis/ArchiveApi';
+import * as TipConfigsApi from '../../apis/TipConfigsApi';
+import * as PersonArchiveApi from '../../apis/PersonArchiveApi';
+import * as ChildrenArchiveApi from '../../apis/ChildrenArchivesApi';
+import {
+	// eslint-disable-next-line no-unused-vars
+	getAgeByBirthDate,
+	bindQRCode,
+	bindBarCode,
+	disposeResult,
+	getDueDay,
+	getGestationalAllDay,
+	getGestationalWeekAndDayTitle
+} from '../../commons';
+import { has } from '../../tools';
+
+const motherAvatar = require('../../assets/avatar-mother.png');
+const childrenAvatar = require('../../assets/avatar-children.png');
+
+export default {
+	name: 'home',
+	components: { CustomHeader, CustomSection, CustomMessage, SignIn },
+	data() {
+		return {
+			isLoading: false,
+			showQRCode: false,
+			showSubscribe: false,
+			subscribeTips: null,
+			User: null,
+			Site: null,
+			Archive: null,
+			Message: null,
+			QRCode: null
+		};
+	},
+	computed: {
+		classRoot() {
+			return `${process.env.VUE_APP_PREFIX}-${this.$options.name}`;
+		},
+		...mapState({
+			mode: state => state[types.MODE],
+			origin: state => state[types.ORIGIN],
+			subscribe: state => state[types.SUBSCRIBE]
+		}),
+		isChangeSite() {
+			const fromSite = getSession(types.FROMSITE);
+			if (this.$route.query.fromSite || fromSite) {
+				return false;
+			}
+			return true;
+		},
+		/**
+		 * 0 孕产妇 1 儿童
+		 * @return {number}
+		 */
+		SystemType() {
+			return this.mode === 'mother' ? 0 : 1;
+		},
+		/**
+		 * 头像
+		 */
+		avatar() {
+			if (this.User) {
+				return this.User.UserImage;
+			}
+			if (this.mode === 'mother') {
+				return motherAvatar;
+			}
+			return childrenAvatar;
+		},
+		/**
+		 * 倒计时标题
+		 * @return {string}
+		 */
+		CountDownTitle() {
+			return this.mode === 'mother' ? '产检' : '儿保';
+		},
+		/**
+		 * 倒计时
+		 * @return {number}
+		 */
+		CountDown() {
+			if (this.mode === 'mother' && this.Archive) {
+				const now = new Date();
+				let date = this.Archive.MenstrualHistories.LastMenstrualDate;
+				if (date) {
+					date = new Date(date);
+					return date.valueOf() - now.valueOf();
+				}
+			}
+			return 0;
+		},
+		userInfo() {
+			if (this.Archive) {
+				if (this.mode === 'mother') {
+					const result = [];
+					const allDay = getGestationalAllDay(
+						this.Archive.MenstrualHistories.LastMenstrualDate
+					);
+					const weekAndDay = getGestationalWeekAndDayTitle(
+						this.Archive.MenstrualHistories.LastMenstrualDate
+					);
+					result.push(`您已怀孕${allDay}天，${weekAndDay}`);
+
+					const dueDay = getDueDay(this.Archive.MenstrualHistories.DueDate);
+					if (dueDay === 0) {
+						result.push('预产期是今天');
+					} else {
+						result.push(
+							dueDay > 0 ? `距离预产期还有${dueDay}天` : `预产期已过${dueDay}天`
+						);
+					}
+					return result;
+				}
+				return getAgeByBirthDate(this.Archive.BirthDate);
+			}
+			return '';
+		},
+		cellbg() {
+			if (this.mode === 'mother') {
+				return '#ffdddf';
+			}
+			return '#fbdcec';
+		}
+	},
+	mounted() {
+		this.onRefresh();
+	},
+	methods: {
+		/**
+		 * 站点切换
+		 */
+		siteChange() {
+			if (this.isChangeSite) {
+				if (this.mode === 'mother') {
+					this.$router.push({ path: `/site/list` });
+				} else {
+					this.$router.push({ path: `/${this.mode}/site/list` });
+				}
+			}
+		},
+		/**
+		 * 消息
+		 */
+		handleRemind() {
+			if (this.mode === 'mother') {
+				this.$router.push({ path: `/message` });
+			} else {
+				this.$router.push({ path: `/${this.mode}/message` });
+			}
+		},
+		/**
+		 * 处理请求参数
+		 */
+		disposeURLParams() {
+			const { method } = this.$route.query;
+			if (
+				method &&
+				has.call(this, method) &&
+				typeof this[method] === 'function'
+			) {
+				setTimeout(this[method], 500);
+				this.$router.push(this.$route.path);
+			}
+		},
+		/**
+		 * 显示我的二维码
+		 */
+		handleQrCode() {
+			if (this.Archive) {
+				const code =
+					this.mode === 'mother'
+						? this.QRCode.PersonArchiveNo
+						: this.QRCode.PersonInfoNo;
+
+				this.showQRCode = true;
+				this.$nextTick(() => {
+					bindBarCode('#barCode', code);
+					bindQRCode(document.getElementById('qrCode'), code, 150, 150);
+				});
+			} else {
+				TipConfigsApi.GetByTipVal(this.mode === 'mother' ? 1401 : 1301).then(
+					res => {
+						Dialog.alert({ message: res.Body.TipConent });
+					}
+				);
+			}
+		},
+		/**
+		 * 切换模式
+		 */
+		handleToggleMode() {
+			const mode = this.mode === 'mother' ? 'children' : 'mother';
+			this.$router.push({ path: '/mode', query: { mode } });
+		},
+		/**
+		 * 刷新
+		 */
+		onRefresh() {
+			this.isLoading = true;
+			// this.$toast.loading('加载中...');
+
+			const keys = ['User', 'Site', 'Message', 'Archive', 'QRCode'];
+			const methods = [
+				UserApi.GetUser(),
+				SiteApi.Current(this.mode === 'mother' ? 0 : 1),
+				this.mode === 'mother'
+					? MessageApi.GetSecondNew(0)
+					: MessageApi.GetSecondNew(1),
+				this.mode === 'mother'
+					? ArchiveApi.Current()
+					: ChildrenArchiveApi.Current(),
+				this.mode === 'mother'
+					? PersonArchiveApi.GetAllNo()
+					: ChildrenArchiveApi.GetAllNo()
+			];
+
+			if (!this.subscribe) {
+				methods.push(
+					...[
+						UserApi.isSubscribe(),
+						TipConfigsApi.GetByTipVal(1600),
+						QrCodeApi.QrCode(0, 0)
+					]
+				);
+			}
+
+			Promise.all(methods)
+				.then(results => {
+					results.forEach((response, index) => {
+						if (index < 5) {
+							const options = {
+								$vm: this,
+								response,
+								key: keys[index]
+							};
+							if (index === 1) {
+								options.parser = this.disposeSite;
+							}
+							disposeResult(options);
+						}
+					});
+					// 显示提示关注二维码弹窗
+					// if (!this.subscribe && !results[5])
+					// if (false) {
+					// 	this.subscribeTips = results[6].Body.TipConent;
+					// 	this.showSubscribe = true;
+					// 	this.$nextTick(() => {
+					// 		bindQRCode(this.$refs.subscribe, results[7].url, 150, 150);
+					// 		this.$store.dispatch(types.SUBSCRIBE, true);
+					// 	});
+					// }
+				})
+				.finally(() => {
+					// this.$toast.clear();
+					this.isLoading = false;
+					this.disposeURLParams();
+				});
+		},
+		/**
+		 * 签到
+		 */
+		handleSignIn() {
+			this.$refs.signIn.handleToggle();
+		},
+		/**
+		 * 栏目项目点击事件
+		 * @param item
+		 */
+		handleSectionItemClick(item) {
+			const type = parseInt(item.IsOutLink, 0);
+			const url = item.Url;
+			switch (type) {
+				case 10: // 外部链接
+					window.location.href = item.Url;
+					break;
+				case 20: // 内部路由
+					this.$router.push({
+						path: item.Url
+					});
+					break;
+				case 30: // 详情页
+					this.$router.push({
+						path: '/section/details',
+						query: { id: item.SectionItemID }
+					});
+					break;
+				case 40: // 页内方法
+					if (has.call(this, url)) {
+						this[url]();
+					}
+					break;
+				default:
+					break;
+			}
+		},
+		/**
+		 * 站点数据处理
+		 * @param site
+		 */
+		disposeSite(site) {
+			const disposeSort = (a, b) => a.Sort - b.Sort;
+			const disposeIsEnabled = m => m.IsEnabled === 1;
+			if (!site) {
+				return null;
+			}
+			site.Sections = site.Sections.filter(disposeIsEnabled);
+			site.Sections = site.Sections.sort(disposeSort);
+			site.Sections.map(section => {
+				section.SectionItems = section.SectionItems.filter(disposeIsEnabled);
+				section.SectionItems = section.SectionItems.sort(disposeSort);
+				return section;
+			});
+			return site;
+		},
+		myArchive() {
+			if (this.mode === 'mother') {
+				this.$router.push({
+					path: '/mother/my-archive',
+					query: {
+						edit_id: this.Archive.ArchiveID
+					}
+				});
+			} else {
+				this.$router.push({
+					path: '/children/my-archive',
+					query: {
+						edit_id: this.Archive.ChildrenArchiveID
+					}
+				});
+			}
+		}
+	}
+};
+</script>
+<style lang="less">
+@import '../../style/variable.less';
+@inner-prefix: ~'@{prefix}-home';
+.@{inner-prefix} {
+	height: 100%;
+	overflow-x: hidden;
+	overflow-y: auto;
+	background: #f9f9f9;
+	&-background {
+		background: linear-gradient(
+			180deg,
+			rgba(255, 221, 223, 1) 0%,
+			rgba(255, 220, 222, 1) 51%,
+			rgba(255, 220, 222, 0) 100%
+		);
+		height: 186px;
+		.title {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 11px 15px;
+			.title_between {
+				display: flex;
+				align-items: center;
+				.text {
+					margin: 0 4px;
+				}
+			}
+			div:first-child {
+				font-size: 14px;
+				color: #333333;
+			}
+			div:last-child {
+				font-size: 13px;
+				color: #333333;
+			}
+		}
+	}
+	.children_home_background {
+		background: linear-gradient(
+			180deg,
+			rgba(239, 219, 233, 1) 0%,
+			rgba(239, 219, 232, 1) 51%,
+			rgba(255, 220, 222, 0) 100%
+		);
+	}
+	&-body {
+		padding: 0 10px 10px 10px;
+		.top_select_panel {
+			margin-top: 105px;
+			background: #ffffff;
+			border-radius: 0 0 10px 10px;
+		}
+	}
+	.van-pull-refresh__track {
+		min-height: 100%;
+	}
+
+	&-dialog {
+		padding: 0.5rem;
+
+		p {
+			font-size: 1rem;
+			text-indent: 2rem;
+		}
+
+		div {
+			text-align: center;
+
+			img {
+				max-width: 60%;
+			}
+		}
+	}
+
+	&-popup {
+		min-height: 50%;
+		max-height: 80%;
+		.van-popup__close-icon {
+			color: #333333;
+			top: 11px;
+		}
+		.van-cell {
+			color: @font-color;
+			.title-archiveno {
+				border-bottom: 1px solid #ee8ca1;
+				padding-bottom: 3px;
+				color: #ee8ca1;
+				svg {
+					margin-left: 5px;
+				}
+			}
+			&:after {
+				border: unset;
+			}
+		}
+		&-body {
+			padding-top: 3.3rem;
+			text-align: center;
+
+			img {
+				margin-bottom: 2.1rem;
+			}
+		}
+		&-footer {
+			text-align: center;
+			padding-bottom: 3.3rem;
+			font-size: 0.85rem;
+
+			svg {
+				vertical-align: middle;
+			}
+		}
+	}
+}
+</style>

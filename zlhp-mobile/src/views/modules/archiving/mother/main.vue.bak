@@ -1,0 +1,2777 @@
+<template>
+	<div :class="classRoot" v-if="site">
+		<van-nav-bar
+			:title="title"
+			left-arrow
+			@click-left="$router.back()"
+			@click-right="showMoreAction = true"
+		>
+			<van-icon name="weapp-nav" slot="right" />
+		</van-nav-bar>
+		<van-action-sheet
+			v-model="showMoreAction"
+			:actions="[
+				{ name: '选择模板', action: 'template' },
+				{ name: '重置表单', action: 'reset' }
+			]"
+			get-container="body"
+			cancel-text="取消"
+			@select="handleMoreActionSelect"
+			@cancel="showMoreAction = false"
+		/>
+		<van-row :class="`${classRoot}-archive-no`" v-if="IsCurrent">
+			<van-col span="18">
+				<b>档案编号：</b>
+				<van-tag plain size="medium" :class="ArchiveNoValid ? 'valid' : ''">{{
+					ArchiveNo
+				}}</van-tag>
+				<span v-show="!ArchiveNoValid">（已过期）</span>
+			</van-col>
+			<van-col span="6" class="right">
+				<van-button
+					size="small"
+					v-show="!ArchiveNoValid"
+					@click="handleRefreshArchiveNo"
+					>刷新</van-button
+				>
+			</van-col>
+		</van-row>
+		<steps v-model="step" :step-list="stepList" />
+		<div
+			ref="body"
+			:class="[`${classRoot}-body`, IsCurrent ? 'exist-archive-no' : '']"
+		>
+			<!-- 本人信息 -->
+			<ValidationObserver ref="form-0" v-show="step === 0">
+				<ValidationProvider
+					rules="required|name"
+					name="姓名"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.Name"
+						required
+						label="姓名"
+						placeholder="请输入姓名"
+						:disabled="editId === 0"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="required"
+					name="证件类型"
+					v-slot="{ errors }"
+				>
+					<combobox
+						label="证件类型"
+						required
+						unNull
+						:disabled="editId === 0"
+						:error-message="errors.join('')"
+						v-model="form.IdType"
+						:options="options.IdType"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					:rules="{
+						required: true,
+						idCard: form.IdType === 1 ? { gender: 2 } : false,
+						officerCard: form.IdType === 2,
+						passPortCard: form.IdType === 4
+					}"
+					name="证件号"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.IDNumber"
+						required
+						label="证件号"
+						placeholder="请输入证件号"
+						:disabled="editId === 0"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider rules="required" v-slot="{ errors }">
+					<combobox
+						label="民族"
+						required
+						unNull
+						:error-message="errors.join('')"
+						v-model="form.Race"
+						:options="
+							options.Race
+								? options.Race.map(m => {
+										return {
+											text: m['CodeName'],
+											value: parseInt(m['CodeVal'])
+										};
+								  })
+								: null
+						"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="required|phone"
+					name="手机号"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.Phone"
+						required
+						label="手机号"
+						placeholder="请输入手机号"
+						:disabled="editId === 0"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					v-if="site.ArchiveVersion === 0"
+					rules="required"
+					name="末次月经"
+					v-slot="{ errors }"
+				>
+					<date
+						label="末次月经"
+						required
+						:minDate="new Date(new Date().setDate(new Date().getDate() - 280))"
+						:maxDate="new Date(new Date().setMonth(new Date().getMonth() - 1))"
+						:value="form.MenstrualHistories.LastMenstrualDate"
+						:rulesErrors="errors"
+						@input="inputLastMenstrualDate"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="required|between:30,199"
+					name="孕前体重"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.BodyWeight"
+						required
+						label="孕前体重"
+						placeholder="请输入孕前体重"
+						:error-message="errors.join('')"
+					>
+						<span slot="right-icon">KG</span>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="required|between:100,250"
+					name="身高"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.Stature"
+						required
+						label="身高"
+						placeholder="请输入身高"
+						:error-message="errors.join('')"
+					>
+						<span slot="right-icon">CM</span>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="文化程度"
+						v-model="form.Educational"
+						:options="options.Educational"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="婚姻状况"
+						v-model="form.MaritalStatus"
+						:options="options.MaritalStatus"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="between:20,100"
+					name="结婚年龄"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.MarriageAge"
+						label="结婚年龄"
+						placeholder="请输入结婚年龄"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="职业"
+						v-model="form.Profession"
+						:options="options.Profession"
+					/>
+				</ValidationProvider>
+				<ValidationProvider name="工作单位" v-slot="{ errors }">
+					<van-field
+						v-model="form.Employer"
+						label="工作单位"
+						placeholder="请输入工作单位"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="required"
+					name="户籍地址"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.RegAddress"
+						required
+						readonly
+						clickable
+						label="户籍地址"
+						placeholder="请输入户籍地址"
+						:error-message="errors.join('')"
+						@click="$refs['reg'].handleShow()"
+					/>
+				</ValidationProvider>
+				<cascade
+					ref="reg"
+					v-model="form"
+					:keys="regAreaKeys"
+					full-field="RegAddress"
+					@done="handleRegAreaDone"
+				/>
+				<ValidationProvider name="详细地址" v-slot="{ errors }">
+					<van-field
+						v-model="form.RegAddressInfo"
+						label="详细地址"
+						placeholder="请输入详细地址"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="required"
+					name="现居地址"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.CurrAddress"
+						required
+						readonly
+						clickable
+						label="现居地址"
+						placeholder="请输入现居地址"
+						:error-message="errors.join('')"
+						@click="$refs['curr'].handleShow()"
+					/>
+				</ValidationProvider>
+				<cascade
+					ref="curr"
+					v-model="form"
+					:keys="curAreaKeys"
+					full-field="CurrAddress"
+					@done="handleCurAreaDone"
+				/>
+				<ValidationProvider name="详细地址" v-slot="{ errors }">
+					<van-field
+						v-model="form.CurrAddressInfo"
+						label="详细地址"
+						placeholder="请输入详细地址"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="required"
+					name="休养地址"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.RestAddress"
+						required
+						readonly
+						clickable
+						label="休养地址"
+						placeholder="请输入休养地址"
+						:error-message="errors.join('')"
+						@click="$refs['rest'].handleShow()"
+					/>
+				</ValidationProvider>
+				<cascade
+					ref="rest"
+					v-model="form"
+					:keys="restAreaKeys"
+					full-field="RestAddress"
+				/>
+				<ValidationProvider name="详细地址" v-slot="{ errors }">
+					<van-field
+						v-model="form.RestAddressInfo"
+						label="详细地址"
+						placeholder="请输入详细地址"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+			</ValidationObserver>
+			<!-- 联系人信息 -->
+			<ValidationObserver ref="form-1" v-show="step === 1">
+				<ValidationProvider>
+					<combobox
+						label="关系类型"
+						required
+						un-null
+						v-model="form.ContactRelationship"
+						:options="options.ContactRelationship"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="required|name"
+					name="姓名"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.HusName"
+						required
+						label="姓名"
+						placeholder="请输入姓名"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="证件类型"
+						un-null
+						v-model="form.HusIdType"
+						:options="options.HusIdType"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					:rules="{
+						idCard: form.HusIdType === 1,
+						officerCard: form.HusIdType === 2,
+						passPortCard: form.HusIdType === 4
+					}"
+					name="证件号"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.HusIDNumber"
+						label="证件号"
+						placeholder="请输入证件号"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="民族"
+						un-null
+						v-model="form.HusRace"
+						:options="
+							options.Race
+								? options.Race.map(m => {
+										return {
+											text: m['CodeName'],
+											value: parseInt(m['CodeVal'])
+										};
+								  })
+								: null
+						"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="required|phone"
+					name="手机号"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.HusPhone"
+						label="手机号"
+						required
+						placeholder="请输入手机号"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="文化程度"
+						un-null
+						v-model="form.HusEducational"
+						:options="options.HusEducational"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="职业"
+						un-null
+						v-model="form.HusProfession"
+						:options="options.HusProfession"
+					/>
+				</ValidationProvider>
+				<ValidationProvider rules="max:50" name="工作单位" v-slot="{ errors }">
+					<van-field
+						v-model="form.HusEmployer"
+						label="工作单位"
+						placeholder="请输入工作单位"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="血型ABO"
+						un-null
+						v-model="form.HusBloodABO"
+						:options="options.HusBloodABO"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="血型RH"
+						un-null
+						v-model="form.HusBloodRH"
+						:options="options.HusBloodRH"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="身体情况"
+						un-null
+						v-model="form.HusPhysicalCondition"
+						:options="options.HusPhysicalCondition"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="既往情况"
+						un-null
+						v-model="form.IsHusPast"
+						:options="options.HaveOrNothing"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="max:50"
+					name="既往情况异常"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.HusPastDisease"
+						label="既往情况异常"
+						v-if="form.IsHusPast === 1"
+						placeholder="请输入既往情况异常"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="肺部疾病"
+						un-null
+						v-model="form.IsHusPulmonaryDisease"
+						:options="options.HaveOrNothing"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="max:50"
+					name="肺部疾病异常"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.HusPulmonaryDisease"
+						label="肺部疾病异常"
+						v-if="form.IsHusPulmonaryDisease === 1"
+						placeholder="请输入肺部疾病异常"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="肾脏疾病"
+						un-null
+						v-model="form.IsHusKidneyDisease"
+						:options="options.HaveOrNothing"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="max:50"
+					name="肾脏疾病异常"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.HusKidneyDisease"
+						label="肾脏疾病异常"
+						v-if="form.IsHusKidneyDisease === 1"
+						placeholder="请输入肾脏疾病异常"
+						:error-message="errors.join('')"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="吸烟"
+						un-null
+						v-model="form.HusSomking"
+						:options="[
+							{ text: '从不', value: 0 },
+							{ text: '偶尔', value: 1 },
+							{ text: '经常', value: 2 }
+						]"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="喝酒"
+						un-null
+						v-model="form.HusDrink"
+						:options="[
+							{ text: '从不', value: 0 },
+							{ text: '偶尔', value: 1 },
+							{ text: '经常', value: 2 }
+						]"
+					/>
+				</ValidationProvider>
+			</ValidationObserver>
+			<!-- 本次妊娠前情况 -->
+			<ValidationObserver
+				:ref="`form-${site.ArchiveVersion === 2 ? 2 : ''}`"
+				v-if="site && site.ArchiveVersion === 2 && step === 2"
+				class="this_pregnancy"
+			>
+				<ValidationProvider>
+					<van-field label="孕前3月是否服用叶酸">
+						<template #input>
+							<van-radio-group
+								v-model="form.ExaminationInfo.IsOralFolicAcid"
+								direction="horizontal"
+							>
+								<van-radio
+									:name="item.value"
+									v-for="(item, index) in options.YesOrNo"
+									:key="index"
+									>{{ item.text }}</van-radio
+								>
+							</van-radio-group>
+						</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="integer|between:0,100"
+					name="天数"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.ExaminationInfo.HCGPositiveDays"
+						label="第一次检查尿HCG阳性在停经"
+						:error-message="errors.join('')"
+					>
+						<span slot="right-icon">天</span>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field label="孕早期发热">
+						<template #input>
+							<van-radio-group
+								v-model="form.ExaminationInfo.IsHeat"
+								direction="horizontal"
+							>
+								<van-radio
+									:name="item.value"
+									v-for="(item, index) in options.HaveOrNothing"
+									:key="index"
+									>{{ item.text }}</van-radio
+								>
+							</van-radio-group>
+						</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field
+						v-show="form.ExaminationInfo.IsHeat === 1"
+						class="textarea"
+						v-model="form.ExaminationInfo.HeatSymptom"
+						rows="3"
+						autosize
+						type="textarea"
+						maxlength="50"
+						placeholder="孕早期发热伴随症状"
+						show-word-limit
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field label="阴道出血">
+						<template #input>
+							<van-radio-group
+								v-model="form.ExaminationInfo.IsVaginalBleeding"
+								direction="horizontal"
+							>
+								<van-radio
+									:name="item.value"
+									v-for="(item, index) in options.HaveOrNothing"
+									:key="index"
+									>{{ item.text }}</van-radio
+								>
+							</van-radio-group>
+						</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field
+						v-show="form.ExaminationInfo.IsVaginalBleeding === 1"
+						class="textarea"
+						v-model="form.ExaminationInfo.VBSymptom"
+						rows="3"
+						autosize
+						type="textarea"
+						maxlength="50"
+						placeholder="阴道出血伴随症状"
+						show-word-limit
+					/>
+				</ValidationProvider>
+				<van-divider>服用可能致畸药物</van-divider>
+				<div
+					v-for="(medications, index) in form.ExaminationInfo.Medications"
+					:key="index"
+				>
+					<div class="medicine">
+						<div class="medicine_index">
+							药物{{ medicineNumText[index] }}
+							<div class="cancle" @click="handleCancle(index)">—</div>
+						</div>
+						<ValidationProvider>
+							<van-field
+								v-model="medications.MedicationName"
+								label="药名"
+								placeholder="请输入药名"
+							>
+							</van-field>
+						</ValidationProvider>
+						<ValidationProvider>
+							<date
+								label="时间"
+								:value="medications.TakeTime"
+								:ref="'date' + index"
+								@input="inputTakeTime('date' + index, medications)"
+							/>
+						</ValidationProvider>
+					</div>
+				</div>
+				<van-cell
+					class="add_medicine"
+					v-if="form.ExaminationInfo.Medications.length < 4"
+				>
+					<template #title>
+						<div class="add_icon" @click="addMedicine">
+							+
+						</div>
+						<span>增加药物服用情况</span>
+					</template>
+				</van-cell>
+				<van-divider>接触物理性有害因素</van-divider>
+				<ValidationProvider>
+					<van-checkbox-group
+						v-model="form.ExaminationInfo.PhysicalHarmfuls"
+						ref="PhysicalHarmfulsGroup"
+					>
+						<van-cell-group>
+							<van-cell
+								v-for="(item, index) in options.PhysicalHarmfuls"
+								clickable
+								:key="index"
+								:title="item['text']"
+								@click="
+									handleCheckboxToggle(
+										form.ExaminationInfo.PhysicalHarmfuls,
+										item['value'],
+										index,
+										'PhysicalHarmfuls'
+									)
+								"
+							>
+								<van-checkbox
+									shape="square"
+									:name="item['value']"
+									ref="PhysicalHarmfuls"
+									slot="right-icon"
+									checked-color="#ef8ea3"
+								/>
+							</van-cell>
+						</van-cell-group>
+					</van-checkbox-group>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field
+						class="textarea"
+						v-show="form.ExaminationInfo.PhysicalHarmfuls.indexOf(8) !== -1"
+						v-model="form.ExaminationInfo.OtherPhysical"
+						rows="3"
+						autosize
+						type="textarea"
+						maxlength="50"
+						placeholder="其他接触物理性有害因素"
+						show-word-limit
+					/>
+				</ValidationProvider>
+				<van-divider>接触高浓度工业毒物</van-divider>
+				<ValidationProvider>
+					<van-checkbox-group
+						v-model="form.ExaminationInfo.IndustrialPoisons"
+						ref="IndustrialPoisonsGroup"
+					>
+						<van-cell-group>
+							<van-cell
+								v-for="(item, index) in options.IndustrialPoisons"
+								clickable
+								:key="index"
+								:title="item['text']"
+								@click="
+									handleCheckboxToggle(
+										form.ExaminationInfo.IndustrialPoisons,
+										item['value'],
+										index,
+										'IndustrialPoisons'
+									)
+								"
+							>
+								<van-checkbox
+									shape="square"
+									:name="item['value']"
+									ref="IndustrialPoisons"
+									slot="right-icon"
+									checked-color="#ef8ea3"
+								/>
+							</van-cell>
+						</van-cell-group>
+					</van-checkbox-group>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field
+						class="textarea"
+						v-show="form.ExaminationInfo.IndustrialPoisons.indexOf(5) !== -1"
+						v-model="form.ExaminationInfo.OtherIndustria"
+						rows="3"
+						autosize
+						type="textarea"
+						maxlength="50"
+						placeholder="其他接触高浓度工业毒物"
+						show-word-limit
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field label="家养宠物">
+						<template #input>
+							<van-radio-group
+								v-model="form.ExaminationInfo.IsKeepPet"
+								direction="horizontal"
+							>
+								<van-radio
+									:name="item.value"
+									v-for="(item, index) in options.HaveOrNothing"
+									:key="index"
+									>{{ item.text }}</van-radio
+								>
+							</van-radio-group>
+						</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field label="环境新装修">
+						<template #input>
+							<van-radio-group
+								v-model="form.ExaminationInfo.IsNewDecoration"
+								direction="horizontal"
+							>
+								<van-radio
+									:name="item.value"
+									v-for="(item, index) in options.HaveOrNothing"
+									:key="index"
+									>{{ item.text }}</van-radio
+								>
+							</van-radio-group>
+						</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field label="饮酒史">
+						<template #input>
+							<van-radio-group
+								v-model="form.ExaminationInfo.IsDrink"
+								direction="horizontal"
+							>
+								<van-radio
+									:name="item.value"
+									v-for="(item, index) in options.HaveOrNothing"
+									:key="index"
+									>{{ item.text }}</van-radio
+								>
+							</van-radio-group>
+						</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="between:0,1000"
+					name="饮酒量"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-if="form.ExaminationInfo.IsDrink === 1"
+						v-model="form.ExaminationInfo.DrinkML"
+						label="饮酒量"
+						:error-message="errors.join('')"
+					>
+						<span slot="right-icon">ML</span>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field label="吸烟">
+						<template #input>
+							<van-radio-group
+								v-model="form.ExaminationInfo.IsSomke"
+								direction="horizontal"
+							>
+								<van-radio
+									:name="item.value"
+									v-for="(item, index) in smokeOptions"
+									:key="index"
+									>{{ item.text }}</van-radio
+								>
+							</van-radio-group>
+						</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider
+					v-if="form.ExaminationInfo.IsSomke !== 0"
+					rules="integer|between:0,100"
+					name="烟龄"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.ExaminationInfo.SmokeAge"
+						label="烟龄"
+						:error-message="errors.join('')"
+					>
+						<span slot="right-icon">年</span>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider
+					v-if="form.ExaminationInfo.IsSomke !== 0"
+					rules="integer|between:0,100"
+					name="吸烟量"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.ExaminationInfo.SmokeTimes"
+						label="平均每天"
+						:error-message="errors.join('')"
+					>
+						<span slot="right-icon">支</span>
+					</van-field>
+				</ValidationProvider>
+				<van-divider>病毒感染（流感皮疹疱疹）</van-divider>
+				<ValidationProvider>
+					<van-field class="two_row" label="部位">
+						<template #input>
+							<van-checkbox-group
+								v-model="form.ExaminationInfo.ViralInfection"
+								direction="horizontal"
+							>
+								<van-checkbox
+									v-for="(item, index) in options.ViralInfection"
+									:key="index"
+									:name="item.value"
+									shape="square"
+									checked-color="#ef8ea3"
+									>{{ item.text }}</van-checkbox
+								>
+							</van-checkbox-group>
+						</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider>
+					<date
+						label="患病时间"
+						:value="form.ExaminationInfo.ViralInfectionTime"
+						@input="inputViralInfectionTime"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field
+						class="textarea"
+						v-model="form.ExaminationInfo.OtherHarmfuls"
+						rows="3"
+						autosize
+						type="textarea"
+						maxlength="50"
+						placeholder="其他有害因素"
+						show-word-limit
+					/>
+				</ValidationProvider>
+			</ValidationObserver>
+			<!-- 月经史 -->
+			<ValidationObserver
+				:ref="`form-${site.ArchiveVersion === 2 ? 3 : 2}`"
+				v-show="
+					(site && site.ArchiveVersion === 2 && step === 3) ||
+						(site && site.ArchiveVersion !== 2 && step === 2)
+				"
+			>
+				<ValidationProvider
+					rules="required"
+					name="末次月经"
+					v-slot="{ errors }"
+				>
+					<date
+						label="末次月经"
+						required
+						:minDate="new Date(new Date().setDate(new Date().getDate() - 280))"
+						:maxDate="new Date(new Date().setMonth(new Date().getMonth() - 1))"
+						:value="form.MenstrualHistories.LastMenstrualDate"
+						:rulesErrors="errors"
+						@input="inputLastMenstrualDate"
+					/>
+				</ValidationProvider>
+				<ValidationProvider
+					:rules="{
+						integer: true,
+						between: [5, 30],
+						error: menarcheAgeError
+					}"
+					name="初潮年龄"
+					v-slot="{ errors }"
+				>
+					<van-field
+						v-model="form.MenstrualHistories.MenarcheAge"
+						label="初潮年龄"
+						placeholder="请输入初潮年龄"
+						:error-message="errors.join('')"
+						right-icon="question-o"
+						@click-right-icon="$toast('初潮年龄：第一次来月经的年龄')"
+					>
+						<div slot="button">岁</div>
+					</van-field>
+				</ValidationProvider>
+				<van-row>
+					<van-divider>月经周期</van-divider>
+					<van-col span="11">
+						<ValidationProvider
+							:rules="{
+								integer: true,
+								between: [21, form.MenstrualHistories.MenstrualCycleMax || 60]
+							}"
+							name="月经周期最小值"
+							v-slot="{ errors }"
+						>
+							<van-field
+								v-model="form.MenstrualHistories.MenstrualCycleMin"
+								placeholder="周期最小值"
+								:error-message="errors.join('')"
+								right-icon="question-o"
+								@click-right-icon="$toast('周期最小值应小于最大值')"
+							></van-field>
+						</ValidationProvider>
+					</van-col>
+					<van-col span="2" style="line-height: 44px">至</van-col>
+					<van-col span="11">
+						<ValidationProvider
+							:rules="{
+								integer: true,
+								between: [form.MenstrualHistories.MenstrualCycleMin || 21, 60]
+							}"
+							name="月经周期最大值"
+							v-slot="{ errors }"
+						>
+							<van-field
+								v-model="form.MenstrualHistories.MenstrualCycleMax"
+								placeholder="周期最大值"
+								:error-message="errors.join('')"
+								right-icon="question-o"
+								@click-right-icon="$toast('周期最大值应大于最小值')"
+							/>
+						</ValidationProvider>
+					</van-col>
+				</van-row>
+				<van-row>
+					<van-divider content-position="left">经期天数</van-divider>
+					<van-col span="11">
+						<ValidationProvider
+							:rules="{
+								integer: true,
+								between: [3, form.MenstrualHistories.MenstrualPeriodMax || 7]
+							}"
+							name="经期天数最小值"
+							v-slot="{ errors }"
+						>
+							<van-field
+								v-model="form.MenstrualHistories.MenstrualPeriodMin"
+								placeholder="经期最小值"
+								:error-message="errors.join('')"
+								right-icon="question-o"
+								@click-right-icon="$toast('周期最小值应小于最大值')"
+							></van-field>
+						</ValidationProvider>
+					</van-col>
+					<van-col span="2" style="line-height: 44px">至</van-col>
+					<van-col span="11">
+						<ValidationProvider
+							:rules="{
+								integer: true,
+								between: [form.MenstrualHistories.MenstrualPeriodMin || 3, 7]
+							}"
+							name="经期天数最大值"
+							v-slot="{ errors }"
+						>
+							<van-field
+								v-model="form.MenstrualHistories.MenstrualPeriodMax"
+								placeholder="经期最大值"
+								:error-message="errors.join('')"
+								right-icon="question-o"
+								@click-right-icon="$toast('周期最大值应大于最小值')"
+							/>
+						</ValidationProvider>
+					</van-col>
+				</van-row>
+				<ValidationProvider>
+					<combobox
+						label="月经量"
+						v-model="form.MenstrualHistories.MenarcheBV"
+						:options="options.MenarcheBV"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="月经色"
+						v-model="form.MenstrualHistories.IsMenarcheColor"
+						:options="[
+							{ text: '异常', value: 0 },
+							{ text: '正常', value: 1 }
+						]"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="痛经"
+						v-model="form.MenstrualHistories.Dysmenorrhea"
+						:options="options.Dysmenorrhea"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="血块"
+						v-model="form.MenstrualHistories.IsBloodClot"
+						:options="options.HaveOrNothing"
+					/>
+				</ValidationProvider>
+			</ValidationObserver>
+			<!-- 孕产史 -->
+			<ValidationObserver
+				:ref="`form-${site.ArchiveVersion === 2 ? 4 : 3}`"
+				v-if="
+					(site && site.ArchiveVersion === 2 && step === 4) ||
+						(site && site.ArchiveVersion !== 2 && step === 3)
+				"
+			>
+				<div class="gestation_histories">
+					<div class="tips">
+						<div class="tips-icon">
+							<svg-icon value="icon-sign_Tips" :size="1.2" />
+						</div>
+						<div class="tips-container">
+							添加孕产史有利于帮助医生更好的了解您的情况，如果有孕产史请如实填写，没有孕产史可以直接跳过。
+						</div>
+					</div>
+					<van-field
+						class="histories_num_input"
+						v-model="gestationHistoriesNum"
+						type="digit"
+						label="已有孕产史"
+						placeholder="请输入孕产次数"
+					>
+						<span slot="right-icon">次</span>
+					</van-field>
+					<van-collapse
+						class="histories_num_collapse"
+						v-model="gestationCollapse"
+					>
+						<van-collapse-item
+							:name="index"
+							v-for="(item, index) in form.GestationHistories
+								.GestationHistoryRecords"
+							:key="index"
+						>
+							<template #title>
+								<div class="collapse_title">第{{ index + 1 }}次孕产情况</div>
+							</template>
+							<div class="gestation_histories_container">
+								<div class="gestation_histories_container_tips">
+									<div class="tips_text">
+										根据自身情况选择填写，存在该情况请如实填写，不存在则不填。
+									</div>
+								</div>
+								<ValidationProvider>
+									<combobox
+										label="分娩方式"
+										v-model="item.BirthMethod"
+										:options="options.BirthMethod"
+									/>
+								</ValidationProvider>
+								<ValidationProvider>
+									<combobox
+										label="分娩情况"
+										v-model="item.BirthSituation"
+										:options="options.BirthSituation"
+									/>
+								</ValidationProvider>
+								<ValidationProvider>
+									<combobox
+										label="流产方式"
+										v-model="item.AbortionMethod"
+										:options="options.AbortionMethod"
+									/>
+								</ValidationProvider>
+								<ValidationProvider>
+									<van-field label="产后出血">
+										<template #input>
+											<van-radio-group
+												v-model="item.Bleeding"
+												direction="horizontal"
+											>
+												<van-radio
+													:name="item.value"
+													v-for="(item, index) in options.YesOrNo"
+													:key="index"
+													>{{ item.text }}</van-radio
+												>
+											</van-radio-group>
+										</template>
+									</van-field>
+								</ValidationProvider>
+								<ValidationProvider>
+									<van-field label="产后输血">
+										<template #input>
+											<van-radio-group
+												v-model="item.TransfusionBlood"
+												direction="horizontal"
+											>
+												<van-radio
+													:name="item.value"
+													v-for="(item, index) in options.YesOrNo"
+													:key="index"
+													>{{ item.text }}</van-radio
+												>
+											</van-radio-group>
+										</template>
+									</van-field>
+								</ValidationProvider>
+								<ValidationProvider>
+									<combobox
+										label="辅助妊娠方式"
+										v-model="item.Assisted"
+										:options="options.Assisted"
+									/>
+								</ValidationProvider>
+								<ValidationProvider name="妊娠终止日期">
+									<date label="妊娠终止日期" v-model="item.GestationStopTime" />
+								</ValidationProvider>
+								<!-- <ValidationProvider>
+									<van-field label="妊娠终止方式">
+										<template #input>
+											<van-radio-group
+												v-model="form.ExaminationInfo.IsVaginalBleeding"
+												direction="horizontal"
+											>
+												<van-radio
+													:name="item.value"
+													v-for="(item, index) in options.HaveOrNothing"
+													:key="index"
+													>{{ item.text }}</van-radio
+												>
+											</van-radio-group>
+										</template>
+									</van-field>
+								</ValidationProvider> -->
+								<ValidationProvider name="分娩日期">
+									<date label="分娩日期" v-model="item.BirthTime" />
+								</ValidationProvider>
+								<ValidationProvider name="分娩地点">
+									<van-field
+										v-model="item.BirthAddress"
+										label="分娩地点"
+										placeholder="请输入分娩地点"
+									/>
+								</ValidationProvider>
+								<ValidationProvider>
+									<van-field
+										label="其他情况"
+										class="textarea"
+										v-model="item.OtherSituations"
+										rows="3"
+										autosize
+										type="textarea"
+										maxlength="50"
+										placeholder="其他情况"
+										show-word-limit
+									/>
+								</ValidationProvider>
+								<van-divider
+									content-position="left"
+									class="baby_situation_dirve"
+									>婴儿情况</van-divider
+								>
+								<div
+									v-for="(babyitem, babyindex) in item.BabySituations"
+									:key="babyindex"
+								>
+									<div class="baby_situation">
+										<div class="baby_index">
+											婴儿{{ medicineNumText[babyindex] }}
+											<div class="cancle" @click="cancleBaby(item, babyindex)">
+												—
+											</div>
+										</div>
+										<ValidationProvider>
+											<van-field
+												v-model="babyitem.Name"
+												label="婴儿姓名"
+												placeholder="请输入婴儿姓名"
+											>
+											</van-field>
+										</ValidationProvider>
+										<ValidationProvider>
+											<van-field label="性别">
+												<template #input>
+													<van-radio-group
+														v-model="babyitem.Sex"
+														direction="horizontal"
+													>
+														<van-radio
+															:name="item.value"
+															v-for="(item, index) in options.Sex"
+															:key="index"
+															>{{ item.text }}</van-radio
+														>
+													</van-radio-group>
+												</template>
+											</van-field>
+										</ValidationProvider>
+										<ValidationProvider>
+											<date label="出生日期" v-model="babyitem.BirthTime" />
+										</ValidationProvider>
+										<ValidationProvider name="出生体重">
+											<van-field
+												v-model="babyitem.BirthWeight"
+												placeholder="请填写出生体重"
+												label="出生体重"
+											>
+												<span slot="right-icon">g</span>
+											</van-field>
+										</ValidationProvider>
+										<ValidationProvider>
+											<van-field label="婴儿畸形">
+												<template #input>
+													<van-radio-group
+														v-model="babyitem.IsAbnormal"
+														direction="horizontal"
+													>
+														<van-radio
+															:name="item.value"
+															v-for="(item, index) in options.HaveOrNothing"
+															:key="index"
+															>{{ item.text }}</van-radio
+														>
+													</van-radio-group>
+												</template>
+											</van-field>
+										</ValidationProvider>
+										<ValidationProvider>
+											<van-field
+												v-show="babyitem.IsAbnormal === 1"
+												class="textarea"
+												v-model="babyitem.Abnormalities"
+												rows="2"
+												autosize
+												label="畸形异常"
+												type="textarea"
+												maxlength="50"
+												placeholder="畸形异常情况"
+												show-word-limit
+											/>
+										</ValidationProvider>
+										<ValidationProvider>
+											<van-field label="婴儿健在">
+												<template #input>
+													<van-radio-group
+														v-model="babyitem.IsAlive"
+														direction="horizontal"
+													>
+														<van-radio
+															:name="item.value"
+															v-for="(item, index) in options.YesOrNo"
+															:key="index"
+															>{{ item.text }}</van-radio
+														>
+													</van-radio-group>
+												</template>
+											</van-field>
+										</ValidationProvider>
+										<ValidationProvider>
+											<van-field
+												v-show="babyitem.IsAlive === 0"
+												class="textarea"
+												v-model="babyitem.DeathCause"
+												rows="2"
+												autosize
+												label="死亡原因"
+												type="textarea"
+												maxlength="50"
+												placeholder="请填写死亡原因"
+												show-word-limit
+											/>
+										</ValidationProvider>
+										<ValidationProvider>
+											<van-field
+												class="textarea"
+												v-model="babyitem.OtherSituations"
+												rows="3"
+												autosize
+												label="其他情况"
+												type="textarea"
+												maxlength="50"
+												placeholder="请填写其他情况"
+												show-word-limit
+											/>
+										</ValidationProvider>
+									</div>
+								</div>
+								<van-cell class="add_baby">
+									<template #title>
+										<div class="add_icon" @click="addBaby(item)">
+											+
+										</div>
+										<span>增加婴儿情况</span>
+									</template>
+								</van-cell>
+							</div>
+						</van-collapse-item>
+					</van-collapse>
+				</div>
+			</ValidationObserver>
+			<!-- 孕产史 -->
+			<!-- <ValidationObserver
+				:ref="`form-${site.ArchiveVersion === 2 ? 4 : 3}`"
+				v-if="
+					(site && site.ArchiveVersion === 2 && step === 4) ||
+						(site && site.ArchiveVersion !== 2 && step === 3)
+				"
+			>
+				<ValidationProvider rules="integer" name="当前孕次" v-slot="{ errors }">
+					<van-field
+						label="当前孕次"
+						placeholder="请输入当前孕次"
+						input-align="right"
+						:error-message="errors.join('')"
+					>
+						<van-stepper
+							slot="input"
+							:min="0"
+							:max="50"
+							v-model="form.GestationHistories.PregnancyTimes"
+						/>
+						<template slot="right-icon">次</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider rules="integer" name="生产次数" v-slot="{ errors }">
+					<van-field
+						label="生产次数"
+						placeholder="请输入生产次数"
+						input-align="right"
+						:error-message="errors.join('')"
+					>
+						<van-stepper
+							slot="input"
+							:min="0"
+							:max="50"
+							v-model="form.GestationHistories.BirthTimes"
+						/>
+						<template slot="right-icon">次</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="integer"
+					name="阴道产次数"
+					v-slot="{ errors }"
+				>
+					<van-field
+						label="阴道产次数"
+						placeholder="请输入阴道产次数"
+						input-align="right"
+						:error-message="errors.join('')"
+					>
+						<van-stepper
+							slot="input"
+							:min="0"
+							:max="50"
+							v-model="form.GestationHistories.VaginalDeliveryTimes"
+						/>
+						<template slot="right-icon">次</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="integer"
+					name="剖宫产次数"
+					v-slot="{ errors }"
+				>
+					<van-field
+						label="剖宫产次数"
+						placeholder="请输入剖宫产次数"
+						input-align="right"
+						:error-message="errors.join('')"
+					>
+						<van-stepper
+							slot="input"
+							:min="0"
+							:max="50"
+							v-model="form.GestationHistories.CaesareanDeliveryTimes"
+						/>
+						<template slot="right-icon">次</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider rules="integer" name="女孩个数" v-slot="{ errors }">
+					<van-field
+						label="女孩个数"
+						placeholder="请输入女孩个数"
+						input-align="right"
+						:error-message="errors.join('')"
+					>
+						<van-stepper
+							slot="input"
+							:min="0"
+							:max="50"
+							v-model="form.GestationHistories.Girls"
+						/>
+						<template slot="right-icon">次</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider rules="integer" name="男孩个数" v-slot="{ errors }">
+					<van-field
+						label="男孩个数"
+						placeholder="请输入男孩个数"
+						input-align="right"
+						:error-message="errors.join('')"
+					>
+						<van-stepper
+							slot="input"
+							:min="0"
+							:max="50"
+							v-model="form.GestationHistories.Boys"
+						/>
+						<template slot="right-icon">次</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="integer"
+					name="自然流产次数"
+					v-slot="{ errors }"
+				>
+					<van-field
+						label="自然流产次数"
+						placeholder="请输入自然流产次数"
+						input-align="right"
+						:error-message="errors.join('')"
+					>
+						<van-stepper
+							slot="input"
+							:min="0"
+							:max="50"
+							v-model="form.GestationHistories.MiscarriageTimes"
+						/>
+						<template slot="right-icon">次</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="integer"
+					name="人工流产次数"
+					v-slot="{ errors }"
+				>
+					<van-field
+						label="人工流产次数"
+						placeholder="请输入人工流产次数"
+						input-align="right"
+						:error-message="errors.join('')"
+					>
+						<van-stepper
+							slot="input"
+							:min="0"
+							:max="50"
+							v-model="form.GestationHistories.AbortionTimes"
+						/>
+						<template slot="right-icon">次</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider rules="integer" name="早产次数" v-slot="{ errors }">
+					<van-field
+						label="早产次数"
+						placeholder="请输入早产次数"
+						input-align="right"
+						:error-message="errors.join('')"
+					>
+						<van-stepper
+							slot="input"
+							:min="0"
+							:max="50"
+							v-model="form.GestationHistories.PrematureLaborTimes"
+						/>
+						<template slot="right-icon">次</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="integer"
+					name="死胎（产）次数"
+					v-slot="{ errors }"
+				>
+					<van-field
+						label="死胎（产）次数"
+						placeholder="请输入死胎（产）次数"
+						input-align="right"
+						:error-message="errors.join('')"
+					>
+						<van-stepper
+							slot="input"
+							:min="0"
+							:max="50"
+							v-model="form.GestationHistories.StillBirthTimes"
+						/>
+						<template slot="right-icon">次</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider
+					rules="integer"
+					name="新生儿死亡次数"
+					v-slot="{ errors }"
+				>
+					<van-field
+						label="新生儿死亡次数"
+						placeholder="请输入新生儿死亡次数"
+						input-align="right"
+						:error-message="errors.join('')"
+					>
+						<van-stepper
+							slot="input"
+							:min="0"
+							:max="50"
+							v-model="form.GestationHistories.NewbornDeathTimes"
+						/>
+						<template slot="right-icon">次</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider>
+					<date
+						label="末次流产"
+						placeholder="请选择末次流产时间"
+						:value="form.GestationHistories.LastAbortionDate"
+						@input="inputLastAbortionDate"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<date
+						label="末次分娩"
+						placeholder="请选择末次分娩时间"
+						:value="form.GestationHistories.LastBirthDate"
+						@input="inputLastBirthDate"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="既往出生缺陷"
+						v-model="form.GestationHistories.IsBirthDefect"
+						:options="options.HaveOrNothing"
+					/>
+				</ValidationProvider>
+				<ValidationProvider>
+					<combobox
+						label="既往妊娠合并症、并发症"
+						v-model="form.GestationHistories.IsComplication"
+						:options="options.HaveOrNothing"
+					/>
+				</ValidationProvider>
+			</ValidationObserver> -->
+			<!-- 既往史 -->
+			<ValidationObserver
+				:ref="`form-${site.ArchiveVersion === 2 ? 5 : 4}`"
+				v-if="
+					(site && site.ArchiveVersion === 2 && step === 5) ||
+						(site && site.ArchiveVersion !== 2 && step === 4)
+				"
+			>
+				<van-divider>既往史</van-divider>
+				<ValidationProvider>
+					<van-checkbox-group v-model="form.PastHistory" ref="PastHistoryGroup">
+						<van-cell-group>
+							<van-cell
+								v-for="(item, index) in options.PastHistory"
+								clickable
+								:key="index"
+								:title="item['text']"
+								@click="
+									handleCheckboxToggle(
+										form.PastHistory,
+										item['value'],
+										index,
+										'PastHistory'
+									)
+								"
+							>
+								<van-checkbox
+									shape="square"
+									:name="item['value']"
+									ref="PastHistory"
+									slot="right-icon"
+									checked-color="#ef8ea3"
+								/>
+							</van-cell>
+						</van-cell-group>
+					</van-checkbox-group>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field
+						v-show="form.PastHistory.indexOf(99) !== -1"
+						v-model="form.OtherPast"
+						rows="2"
+						autosize
+						label="其他既往史"
+						type="textarea"
+						maxlength="50"
+						placeholder="请输入其他既往史"
+						show-word-limit
+					/>
+				</ValidationProvider>
+				<ValidationProvider class="form_radio" v-if="site.ArchiveVersion === 2">
+					<van-field label="药物过敏史">
+						<template #input>
+							<van-radio-group
+								v-model="form.IsDrugAllergyHistory"
+								direction="horizontal"
+							>
+								<van-radio
+									:name="item.value"
+									v-for="(item, index) in options.HaveOrNothing"
+									:key="index"
+									>{{ item.text }}</van-radio
+								>
+							</van-radio-group>
+						</template>
+					</van-field>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field
+						v-show="
+							site.ArchiveVersion === 2 && form.IsDrugAllergyHistory === 1
+						"
+						class="textarea"
+						v-model="form.DrugAllergyHistory"
+						rows="3"
+						autosize
+						type="textarea"
+						maxlength="50"
+						placeholder="药物过敏史情况"
+						show-word-limit
+					/>
+				</ValidationProvider>
+			</ValidationObserver>
+			<!-- 家族史、个人史、手术史 -->
+			<ValidationObserver
+				:ref="`form-${site.ArchiveVersion === 2 ? 6 : 5}`"
+				v-if="
+					(site && site.ArchiveVersion === 2 && step === 6) ||
+						(site && site.ArchiveVersion !== 2 && step === 5)
+				"
+			>
+				<van-divider>家族史</van-divider>
+				<ValidationProvider>
+					<van-checkbox-group
+						v-model="form.FamilyHistory"
+						ref="FamilyHistoryGroup"
+					>
+						<van-cell-group>
+							<van-cell
+								v-for="(item, index) in options.FamilyHistory"
+								clickable
+								:key="index"
+								:title="item['text']"
+								@click="
+									handleCheckboxToggle(
+										form.FamilyHistory,
+										item['value'],
+										index,
+										'FamilyHistory'
+									)
+								"
+							>
+								<van-checkbox
+									shape="square"
+									:name="item['value']"
+									ref="FamilyHistory"
+									slot="right-icon"
+									checked-color="#ef8ea3"
+								/>
+							</van-cell>
+						</van-cell-group>
+					</van-checkbox-group>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field
+						v-show="form.FamilyHistory.indexOf(99) !== -1"
+						v-model="form.OtherFamilyHistory"
+						rows="2"
+						autosize
+						label="其他家族史"
+						type="textarea"
+						maxlength="50"
+						placeholder="请输入其他家族史"
+						show-word-limit
+					/>
+				</ValidationProvider>
+				<van-divider>个人史</van-divider>
+				<ValidationProvider>
+					<van-checkbox-group
+						v-model="form.PersonHistory"
+						ref="PersonHistoryGroup"
+					>
+						<van-cell-group>
+							<van-cell
+								v-for="(item, index) in options.PersonHistory"
+								clickable
+								:key="index"
+								:title="item['text']"
+								@click="
+									handleCheckboxToggle(
+										form.PersonHistory,
+										item['value'],
+										index,
+										'PersonHistory'
+									)
+								"
+							>
+								<van-checkbox
+									shape="square"
+									:name="item['value']"
+									ref="PersonHistory"
+									slot="right-icon"
+									checked-color="#ef8ea3"
+								/>
+							</van-cell>
+						</van-cell-group>
+					</van-checkbox-group>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field
+						v-show="form.PersonHistory.indexOf(6) !== -1"
+						v-model="form.OtherPersonHistory"
+						rows="2"
+						autosize
+						label="其他个人史"
+						type="textarea"
+						maxlength="50"
+						placeholder="请输入其他个人史"
+						show-word-limit
+					/>
+				</ValidationProvider>
+				<van-divider>妇产科手术史</van-divider>
+				<ValidationProvider>
+					<van-checkbox-group
+						v-model="form.SurgeryHistory"
+						ref="SurgeryHistoryGroup"
+					>
+						<van-cell-group>
+							<van-cell
+								v-for="(item, index) in options.SurgeryHistory"
+								clickable
+								:key="index"
+								:title="item['text']"
+								@click="
+									handleCheckboxToggle(
+										form.SurgeryHistory,
+										item['value'],
+										index,
+										'SurgeryHistory'
+									)
+								"
+							>
+								<van-checkbox
+									shape="square"
+									:name="item['value']"
+									ref="SurgeryHistory"
+									slot="right-icon"
+									checked-color="#ef8ea3"
+								/>
+							</van-cell>
+						</van-cell-group>
+					</van-checkbox-group>
+				</ValidationProvider>
+				<ValidationProvider>
+					<van-field
+						v-show="form.SurgeryHistory.indexOf(99) !== -1"
+						v-model="form.OtherSurgery"
+						rows="2"
+						autosize
+						label="手术史描述"
+						type="textarea"
+						maxlength="50"
+						placeholder="请输入手术史描述"
+						show-word-limit
+					/>
+				</ValidationProvider>
+			</ValidationObserver>
+			<van-cell :class="`${classRoot}-body-footer`">
+				<van-button slot="title" @click="handlePrev">上一步</van-button>
+				<van-button @click="handleNext" type="info">{{
+					step === stepList.length - 1 ||
+					(step === 1 && site && site.ArchiveVersion === 0)
+						? '提交'
+						: '下一步'
+				}}</van-button>
+			</van-cell>
+		</div>
+		<History ref="history" @onClick="handleHistoryClick" />
+	</div>
+</template>
+<script>
+import _ from 'lodash';
+import { form, regAreaKeys, restAreaKeys, curAreaKeys } from './data';
+import * as EnumApi from '../../../../apis/EnumApi';
+import * as CodeApi from '../../../../apis/CodeApi';
+import * as ArchiveApi from '../../../../apis/ArchiveApi';
+import * as PersonArchiveApi from '../../../../apis/PersonArchiveApi';
+import * as SiteApi from '../../../../apis/SiteApi';
+import types from '../../../../commons/types';
+import {
+	getSession,
+	setSession,
+	removeSession
+} from '../../../../commons/session';
+import History from './components/history';
+import { getDistance, setLocation } from '../../../../commons/weixin';
+import { has } from '../../../../tools';
+import { getAgeByIdCard } from '../../../../commons';
+
+export default {
+	name: 'archiving',
+	components: { History },
+	data() {
+		return {
+			isBind: false, // 是否为绑定界面跳转来
+			showMoreAction: false, // 是否显示更多操作（右上角按钮）
+			uuidInterval: null, // 定位用定时器
+			distance: null, // 微信定位结果
+			step: 0,
+			stepList: [
+				'本人信息',
+				'联系人信息',
+				'本次妊娠前情况',
+				'月经史',
+				'孕产史',
+				'既往史',
+				'家族史、个人史、手术史'
+			],
+			form: _.cloneDeep(form),
+			regAreaKeys,
+			restAreaKeys,
+			curAreaKeys,
+			options: {},
+			medicineNum: 2, // 药物数量
+			medicineNumText: ['一', '二', '三', '四'],
+			medicineNumShow: [true, false, false, false],
+			medicineTrue: [],
+			medicineFase: [],
+			smokeOptions: [
+				{ text: '无', value: 0 },
+				{ text: '主动', value: 1 },
+				{ text: '被动', value: 2 }
+			],
+			site: null, // 站点信息
+			gestationHistoriesNum: null, // 孕产次数
+			gestationCollapse: ['1']
+		};
+	},
+	computed: {
+		classRoot() {
+			return `${process.env.VUE_APP_PREFIX_MOTHER}-${this.$options.name}`;
+		},
+		// 标题
+		title() {
+			if (this.id) {
+				return '编辑档案';
+			}
+			if (this.isBind) {
+				return '完善信息';
+			}
+			return '自主建档';
+		},
+		// 编辑ID
+		editId() {
+			return has.call(this.$route.query, 'edit_id')
+				? this.$route.query.edit_id
+				: 0;
+		},
+		// 是否当前档案
+		IsCurrent() {
+			return has.call(this.form, 'IsCurrent') && this.form.IsCurrent === 10;
+		},
+		// 档案编号
+		ArchiveNo() {
+			return this.form.ArchiveNo;
+		},
+		/**
+		 * 档案编号有效 true 有效， false 无效
+		 * @return {boolean}
+		 */
+		ArchiveNoValid() {
+			if (has.call(this.form, 'UpdateTime')) {
+				const date = new Date(this.form.UpdateTime);
+				const expire = new Date(new Date().setDate(new Date().getDate() - 7));
+				return date >= expire;
+			}
+			return false;
+		},
+		/**
+		 * 初潮年龄验证
+		 */
+		menarcheAgeError() {
+			if (
+				this.form.MenstrualHistories.MenarcheAge &&
+				this.form.IDNumber &&
+				this.form.MenstrualHistories.MenarcheAge >
+					getAgeByIdCard(this.form.IDNumber)
+			) {
+				return '不能大于当前年龄';
+			}
+			return null;
+		},
+		/**
+		 * 药物过敏史
+		 */
+		isDrugAllergyHistory() {
+			return this.form.IsDrugAllergyHistory;
+		}
+	},
+	watch: {
+		/**
+		 * 药物过敏史为无时，清空药物过敏史情况数据
+		 */
+		isDrugAllergyHistory() {
+			if (this.form.IsDrugAllergyHistory === 0) {
+				this.form.DrugAllergyHistory = '';
+			}
+		},
+		/**
+		 * 孕产次数
+		 */
+		gestationHistoriesNum() {
+			this.form.GestationHistories.GestationHistoryRecords = [];
+			for (let index = 0; index < this.gestationHistoriesNum; index += 1) {
+				const obj = {
+					BirthMethod: null, // 分娩方式
+					BirthSituation: null, // 分娩情况
+					AbortionMethod: null, // 流产方式
+					Bleeding: null, // 产后出血
+					TransfusionBlood: null, // 产后输血
+					Assisted: null, // 辅助妊娠方式
+					GestationStopTime: null, // 妊娠终止时间
+					BirthTime: null, // 分娩时间
+					BirthAddress: null, // 分娩地点
+					OtherSituations: '', // 备注
+					BabySituations: [] // 婴儿情况
+				};
+				this.form.GestationHistories.GestationHistoryRecords.push(obj);
+			}
+		}
+	},
+	created() {
+		this.medicineNumShowChange();
+		const disposeDistance = () => {
+			getDistance().then(distance => {
+				this.distance = distance;
+			});
+		};
+		disposeDistance();
+		this.uuidInterval = setInterval(disposeDistance, 10 * 1000);
+		this.loadData();
+	},
+	mounted() {
+		this.disposeQuery();
+	},
+	beforeDestroy() {
+		clearInterval(this.uuidInterval);
+		this.uuidInterval = null;
+	},
+	methods: {
+		getAgeByIdCard,
+		/**
+		 * 添加婴儿
+		 */
+		addBaby(item) {
+			const obj = {
+				Name: null, // 婴儿姓名
+				Sex: null, // 婴儿性别
+				BirthTime: null, // 出生日期
+				BirthWeight: null, // 出生体重
+				IsAbnormal: null, // 婴儿畸形
+				Abnormalities: '', // 畸形异常
+				IsAlive: null, // 婴儿健在
+				DeathCause: '', // 死亡原因
+				OtherSituations: '' // 其他情况
+			};
+			item.BabySituations.push(obj);
+		},
+		/**
+		 * 删除婴儿
+		 */
+		cancleBaby(item, ind) {
+			item.BabySituations = item.BabySituations.filter(
+				(m, index) => index !== ind
+			);
+		},
+		/**
+		 * 药物显示
+		 */
+		medicineNumShowChange() {
+			this.medicineTrue = [];
+			this.medicineFase = [];
+			this.medicineNumShow.forEach((element, index) => {
+				if (element === true) {
+					this.medicineTrue.push(index);
+				} else {
+					this.medicineFase.push(index);
+				}
+			});
+		},
+		/** 添加药物 */
+		addMedicine() {
+			if (this.form.ExaminationInfo.Medications.length < 4) {
+				const obj = {
+					PrePregnancyInfoID: null, // 妊娠前情况ID
+					MedicationName: null, // 药物名称
+					TakeTime: null // 服用时间
+				};
+				this.form.ExaminationInfo.Medications.push(obj);
+			}
+		},
+		/**
+		 * 选择末次月经
+		 */
+		inputLastMenstrualDate(val) {
+			this.form.MenstrualHistories.LastMenstrualDate = val;
+		},
+		/**
+		 * 选择末次流产时间
+		 */
+		inputLastAbortionDate(val) {
+			this.form.GestationHistories.LastAbortionDate = val;
+		},
+		/**
+		 * 选择末次分娩时间
+		 */
+		inputLastBirthDate(val) {
+			this.form.GestationHistories.LastBirthDate = val;
+		},
+		/**
+		 * 病毒感染时间
+		 */
+		inputViralInfectionTime(val) {
+			this.form.ExaminationInfo.ViralInfectionTime = val;
+		},
+		/**
+		 * 服药时间
+		 */
+		inputTakeTime(ref, medications) {
+			medications.TakeTime = this.$refs[ref][0].dateVal;
+		},
+		/**
+		 * 删除药物
+		 */
+		handleCancle(medicationsIndex) {
+			this.form.ExaminationInfo.Medications = this.form.ExaminationInfo.Medications.filter(
+				(m, index) => index !== medicationsIndex
+			);
+		},
+		/**
+		 * 处理请求参数
+		 */
+		disposeQuery() {
+			if (has.call(this.$route.query, types.FROM_BINDING)) {
+				const fromData = JSON.parse(getSession(types.FROM_BINDING));
+				this.isBind = fromData.is_bind;
+				this.form.Name = fromData.form.Name;
+				this.form.IDNumber = fromData.form.IdNumber;
+				this.form.Phone = fromData.form.Phone;
+				this.form.IdType = fromData.form.IdType;
+			}
+		},
+		/**
+		 * 提交表单
+		 */
+		submit() {
+			this.$toast.loading('正在保存...');
+			const formParse = this.parseForm(this.form, true);
+			if (this.site.ArchiveVersion === 0) {
+				formParse.ExaminationInfo = null;
+				formParse.GestationHistories = null;
+			}
+
+			setLocation(this.distance).finally(() => {
+				PersonArchiveApi.insertOrUpdate(this.editId, this.isBind, formParse)
+					.then(response => {
+						removeSession(types.FROM_BINDING);
+
+						if (this.editId !== 0) {
+							this.$toast.success({
+								forbidClick: true,
+								duration: 1000,
+								message: '修改成功!',
+								onClose: () => {
+									this.$router.back();
+								}
+							});
+						} else {
+							setSession(
+								types.FROM_ARCHIVING,
+								JSON.stringify({
+									code: response.Code,
+									message: response.Message,
+									is_bind: this.isBind
+								})
+							);
+							this.$router.push({
+								path: '/mother/binding',
+								query: this.isBind
+									? { from_archiving: null }
+									: { from_archiving: null, archiving: null }
+							});
+						}
+					})
+					.finally(this.$toast.clear);
+			});
+		},
+		/**
+		 * 更多按钮选中事件
+		 */
+		handleMoreActionSelect(item) {
+			if (item.action === 'template') {
+				this.$refs.history.handleShow();
+			} else if (item.action === 'reset') {
+				this.form = _.cloneDeep(form);
+				this.disposeQuery();
+				this.loadData();
+			}
+			this.showMoreAction = false;
+		},
+		/**
+		 * 历史档案点击事件
+		 */
+		handleHistoryClick(id) {
+			this.$toast.loading('加载中...');
+			ArchiveApi.Get(id)
+				.then(response => {
+					if (response.Code === 0) {
+						this.form = this.parseForm(response.Body);
+						delete this.form.IsCurrent;
+						this.disposeQuery();
+					}
+				})
+				.finally(this.$toast.clear);
+		},
+		/**
+		 * 刷新编号
+		 */
+		handleRefreshArchiveNo() {
+			this.$toast.loading('正在刷新...');
+			ArchiveApi.GetAndRefreshNo(this.editId)
+				.then(response => {
+					if (response.Code === 0) {
+						this.$set(this.form, 'ArchiveNo', response.Body.ArchiveNo);
+						this.$set(this.form, 'UpdateTime', response.Body.UpdateTime);
+						this.$toast.success('编号刷新成功！');
+					} else {
+						this.$toast.fail('编号刷新失败！');
+					}
+				})
+				.finally(this.$toast.clear);
+		},
+		/**
+		 * 多选开关
+		 * @param obj 对象
+		 * @param value 项目值
+		 * @param index 索引
+		 * @param ref 多选框ref
+		 * @param reValue 重选值
+		 * @param reValueIndex 重选值索引
+		 */
+
+		handleCheckboxToggle(
+			obj,
+			value,
+			index,
+			ref,
+			reValue = 0,
+			reValueIndex = 0
+		) {
+			this.$refs[ref][index].toggle();
+			if (value === reValue) {
+				if (obj.indexOf(value) === -1) {
+					this.$refs[`${ref}Group`].toggleAll(false);
+				}
+			} else {
+				this.$refs[ref][reValueIndex].toggle(false);
+			}
+			this.$refs[ref][index].toggle();
+		},
+		/**
+		 * 定位到
+		 * @param distance
+		 */
+		scrollTop(distance) {
+			this.$refs.body.scroll({
+				top: distance,
+				behavior: 'smooth'
+			});
+		},
+		/**
+		 * 上一步
+		 */
+		handlePrev() {
+			if (this.step === 0) {
+				this.$router.back();
+			} else {
+				this.step -= 1;
+				this.scrollTop(0);
+			}
+		},
+		/**
+		 * 下一步
+		 */
+		handleNext() {
+			const currentForm = this.$refs[`form-${this.step}`];
+			currentForm.validate().then(result => {
+				if (result) {
+					if (
+						this.step === this.stepList.length - 1 ||
+						(this.step === 1 && this.site && this.site.ArchiveVersion === 0)
+					) {
+						this.submit();
+					} else {
+						this.step += 1;
+						this.scrollTop(0);
+					}
+				} else {
+					this.handleAlignmentError(currentForm);
+				}
+			});
+		},
+		/**
+		 * 定位错误
+		 * @param formEl 当前表单
+		 */
+		handleAlignmentError(formEl) {
+			const list = formEl.$el.getElementsByClassName(
+				'van-field__error-message'
+			);
+			let errorEl = null;
+			for (let i = 0; i < list.length; i += 1) {
+				if (list[i].textContent) {
+					errorEl = list[i];
+					break;
+				}
+			}
+			if (errorEl) {
+				const distance = errorEl.parentNode.parentNode.parentNode.offsetTop;
+				const pNode = formEl.$el.parentNode;
+				this.scrollTop(distance - pNode.offsetTop);
+			}
+		},
+		/**
+		 * 户籍地址确认回调
+		 */
+		handleRegAreaDone(data) {
+			if (!this.form.Province) {
+				for (let i = 0; i < data.values.length; i += 1) {
+					if (!data.values[i]) {
+						break;
+					}
+					this.form[this.curAreaKeys[i]] = data.values[i];
+				}
+				this.form.CurrAddress = data.fullText;
+			}
+			this.handleCurAreaDone(data);
+		},
+		/**
+		 * 现地址确认回调
+		 */
+		handleCurAreaDone(data) {
+			if (!this.form.RestProvince) {
+				for (let i = 0; i < data.values.length; i += 1) {
+					if (!data.values[i]) {
+						break;
+					}
+					this.form[this.restAreaKeys[i]] = data.values[i];
+				}
+				this.form.RestAddress = data.fullText;
+			}
+		},
+		/**
+		 * 加载数据
+		 */
+		loadData() {
+			this.$toast.loading('加载中...');
+
+			const methods = [
+				EnumApi.GetList(
+					[
+						'IdType',
+						'Educational',
+						'MaritalStatus',
+						'Profession',
+						'ContactRelationship',
+						'HusIdType',
+						'HusEducational',
+						'HusProfession',
+						'HusBloodABO',
+						'HusBloodRH',
+						'HusPhysicalCondition',
+						'MenarcheBV',
+						'Dysmenorrhea',
+						'PastHistory',
+						'FamilyHistory',
+						'PersonHistory',
+						'SurgeryHistory',
+						'HaveOrNothing',
+						'PhysicalHarmfuls',
+						'IndustrialPoisons',
+						'YesOrNo',
+						'ViralInfection',
+						'Sex',
+						'BirthMethod',
+						'BirthSituation',
+						'AbortionMethod',
+						'Assisted'
+					].map(m => `${m}Enum`)
+				),
+				CodeApi.GetRace(),
+				SiteApi.Current(this.mode === 'mother' ? 0 : 1)
+			];
+
+			// 添加查询档案方法
+			if (this.editId) {
+				methods.push(ArchiveApi.Get(this.editId));
+			}
+			// 基础数据加载
+			Promise.all(methods)
+				.then(results => {
+					results.forEach((item, index) => {
+						if (index === 0 && item.Code === 0) {
+							Object.keys(item.Body).forEach(key => {
+								this.$set(this.options, key, item.Body[key]);
+							});
+						}
+						if (index === 1) {
+							this.$set(this.options, 'Race', item);
+						}
+						if (index === 2 && item.Code === 0) {
+							this.site = item.Body;
+							if (this.site.ArchiveVersion === 0) {
+								this.stepList = this.stepList.filter((m, ind) => ind < 2);
+							} else if (this.site.ArchiveVersion !== 2) {
+								this.stepList = this.stepList.filter((m, ind) => ind !== 2);
+							}
+						}
+						if (index === 3 && item.Code === 0) {
+							this.form = this.parseForm(item.Body);
+						}
+					});
+				})
+				.finally(this.$toast.clear);
+		},
+		/**
+		 * 解析对象
+		 * @param formObj 表单对象
+		 * @param reverse 反转（数组转字符串）
+		 */
+		parseForm(formObj, reverse) {
+			this.$delete(formObj, 'ArchiveID');
+			// 需要在Array/String之间转换的字段
+			const convertArrayField = [
+				'PastHistory',
+				'PersonHistory',
+				'FamilyHistory',
+				'PhysicalHarmfuls',
+				'IndustrialPoisons',
+				'SurgeryHistory',
+				'ViralInfection'
+			];
+			// 需要转换为Date的字段
+			const convertDateField = [
+				'LastMenstrualDate',
+				'LastBirthDate',
+				'LastAbortionDate',
+				'ViralInfectionTime',
+				'TakeTime',
+				'GestationStopTime',
+				'BirthTime',
+				'BirthTime'
+			];
+			// 空字段转为空字符串
+			const convertNullString = [
+				'HeatSymptom',
+				'VBSymptom',
+				'OtherPhysical',
+				'OtherIndustria',
+				'OtherHarmfuls',
+				'DrugAllergyHistory'
+			];
+			const dispose = obj => {
+				Object.keys(obj).forEach(key => {
+					if (convertArrayField.indexOf(key) !== -1) {
+						if (reverse) {
+							obj[key] = obj[key].toString();
+						} else if (_.isEmpty(obj[key])) {
+							obj[key] = [];
+						} else {
+							obj[key] = obj[key].split(',').map(m => parseInt(m, 0));
+						}
+					}
+					if (convertDateField.indexOf(key) !== -1) {
+						if (_.isEmpty(obj[key])) {
+							obj[key] = null;
+						} else if (reverse) {
+							obj[key] = new Date(obj[key]).toLocaleDateString();
+						} else {
+							obj[key] = new Date(new Date(obj[key]).toJSON());
+						}
+					}
+					if (convertNullString.indexOf(key) !== -1) {
+						if (_.isEmpty(obj[key])) {
+							obj[key] = '';
+						}
+					}
+					if (obj[key] instanceof Object) {
+						dispose(obj[key]);
+					}
+				});
+			};
+			// const result = _.cloneDeep(formObj);
+			const result = JSON.parse(JSON.stringify(formObj));
+			dispose(result);
+			return result;
+		}
+	}
+};
+</script>
+<style lang="less">
+@import '../../../../style/variable.less';
+@inner-prefix: ~'@{prefix-mother}-archiving';
+.@{inner-prefix} {
+	height: 100%;
+	background-color: @background-color-container;
+	overflow-x: hidden;
+	overflow-y: auto;
+
+	&-archive-no {
+		padding: 0 15px;
+		line-height: 35px;
+		background-color: white;
+		border-bottom: 1px dashed #d2d2d2;
+
+		.right {
+			text-align: right;
+		}
+
+		.van-tag {
+			font-size: 1.1rem;
+			&.valid {
+				color: rgba(255, 64, 129, 0.75);
+			}
+		}
+
+		span {
+			color: rgba(255, 64, 129, 0.75);
+		}
+	}
+	&-body {
+		border-top: 1px dashed #d2d2d2;
+		background-color: white;
+		height: calc(100% - 103px);
+		overflow-x: hidden;
+		overflow-y: auto;
+		.van-checkbox {
+			.van-checkbox__icon .van-icon {
+				border-radius: 3px;
+			}
+		}
+		&.exist-archive-no {
+			height: calc(100% - 139px);
+		}
+
+		> span {
+			> span {
+				> .van-cell {
+					border-bottom: 1px solid #f2f2f2;
+					.van-stepper__minus::before,
+					.van-stepper__plus::before {
+						width: 0.93rem;
+						height: 0.1rem;
+					}
+				}
+			}
+		}
+		.van-stepper__minus--disabled {
+			background: #f2f3f5;
+		}
+		&-footer {
+			.van-cell__title,
+			.van-cell__value {
+				text-align: center;
+				overflow: unset;
+
+				button {
+					width: 90%;
+					height: 40px;
+					border: unset;
+					font-size: 16px;
+					box-shadow: @box-shadow;
+				}
+			}
+			.van-cell__title {
+				button {
+					background-color: #f2f2f2;
+				}
+			}
+			.van-cell__value {
+				button {
+					color: white;
+					background-color: @next-button-color;
+				}
+			}
+		}
+		.van-row {
+			border-bottom: 1px solid #f2f2f2;
+			.van-divider {
+				padding-bottom: unset;
+				margin-bottom: unset;
+				color: #323233;
+				&::before {
+					max-width: 0;
+				}
+			}
+		}
+		.this_pregnancy {
+			.medicine {
+				.van-cell {
+					border-bottom: 0.5px solid #eeeeee;
+				}
+				.medicine_index {
+					background: #f8f8f8;
+					text-align: center;
+					font-size: 14px;
+					color: #000000;
+					padding: 13px 22px;
+					.cancle {
+						width: 18px;
+						height: 18px;
+						float: right;
+						background: #ff5454;
+						border-radius: 50%;
+						color: #ffffff;
+						line-height: 18px;
+						font-size: 10px;
+						font-weight: bold;
+						text-align: center;
+					}
+				}
+			}
+			.add_medicine {
+				.van-cell__title {
+					display: flex;
+					flex-direction: row;
+					align-items: center;
+					.add_icon {
+						width: 22px;
+						height: 22px;
+						border: 2px dashed #ffb2bf;
+						text-align: center;
+						font-size: 18px;
+						color: #ffb2bf;
+						font-weight: bold;
+						margin-right: 13px;
+						line-height: 22px;
+					}
+					span {
+						font-size: 15px;
+						color: #333333;
+						letter-spacing: 2px;
+					}
+				}
+			}
+			.van-cell {
+				height: 60px;
+				align-items: center;
+				.van-field__control--custom {
+					justify-content: flex-end;
+					.van-radio--horizontal {
+						margin-left: 10px;
+						margin-right: 0;
+						.van-radio__icon--checked .van-icon {
+							background: #ef8ea3;
+							border-color: #ef8ea3;
+						}
+					}
+				}
+				.van-field__control,
+				.van-field__error-message {
+					text-align: right;
+				}
+				.van-field__label {
+					width: 101px;
+					color: #333333;
+				}
+			}
+			.textarea {
+				height: auto;
+				.van-field__control {
+					text-align: left;
+				}
+			}
+			.van-divider {
+				margin: 20px 0;
+			}
+			.two_row {
+				flex-direction: column;
+				height: auto;
+				align-items: baseline;
+				.van-cell__value {
+					margin-top: 10px;
+					display: flex;
+					width: 100%;
+					.van-field__body {
+						width: 100%;
+						.van-checkbox-group--horizontal {
+							width: 100%;
+							justify-content: space-between;
+						}
+					}
+				}
+			}
+		}
+		.gestation_histories {
+			min-height: 420px;
+			.tips {
+				padding: 18px 17px 0 17px;
+				background-color: #fff;
+				display: flex;
+				flex-direction: row;
+				margin-bottom: 8px;
+				.tips-icon {
+					padding-top: 5px;
+				}
+				.tips-container {
+					margin-left: 9px;
+					font-size: 13px;
+					line-height: 25px;
+					color: #666666;
+				}
+			}
+			.histories_num_input {
+				.van-field__label {
+					color: #000000;
+				}
+			}
+			.histories_num_collapse {
+				.van-cell {
+					height: 70px;
+					align-items: center;
+					.collapse_title {
+						font-size: 16px;
+						color: #333333;
+					}
+				}
+				.van-collapse-item__content {
+					padding: 0;
+					.gestation_histories_container {
+						.gestation_histories_container_tips {
+							padding: 0 15px;
+							.tips_text {
+								border: 1px solid #ffb2bf;
+								font-size: 13px;
+								color: #999999;
+								padding: 8px;
+							}
+						}
+						.van-cell {
+							border-bottom: 1px solid #eeeeee;
+
+							.van-field__label {
+								width: 60px;
+								color: #666666;
+							}
+							.van-cell__value {
+								margin-left: 18px;
+							}
+						}
+						.textarea {
+							height: auto;
+							align-items: flex-start;
+						}
+						.baby_situation_dirve {
+							color: #ffb2bf;
+							border-color: #ffb2bf;
+						}
+						.baby_situation {
+							.van-cell {
+								border-bottom: 0.5px solid #eeeeee;
+							}
+							.baby_index {
+								background: #f8f8f8;
+								text-align: center;
+								font-size: 14px;
+								color: #000000;
+								padding: 13px 22px;
+								.cancle {
+									width: 18px;
+									height: 18px;
+									float: right;
+									background: #ff5454;
+									border-radius: 50%;
+									color: #ffffff;
+									line-height: 18px;
+									font-size: 10px;
+									font-weight: bold;
+									text-align: center;
+								}
+							}
+						}
+						.add_baby {
+							.van-cell__title {
+								display: flex;
+								flex-direction: row;
+								align-items: center;
+								.add_icon {
+									width: 22px;
+									height: 22px;
+									border: 2px dashed #ffb2bf;
+									text-align: center;
+									font-size: 18px;
+									color: #ffb2bf;
+									font-weight: bold;
+									margin-right: 13px;
+									line-height: 22px;
+								}
+								span {
+									font-size: 15px;
+									color: #333333;
+									letter-spacing: 2px;
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		.form_radio {
+			.van-field__control--custom {
+				justify-content: flex-end;
+				.van-radio--horizontal {
+					margin-left: 10px;
+					margin-right: 0;
+					.van-radio__icon--checked .van-icon {
+						background: #ef8ea3;
+						border-color: #ef8ea3;
+					}
+				}
+			}
+		}
+	}
+}
+</style>

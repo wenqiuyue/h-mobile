@@ -1,0 +1,15 @@
+<svg id="mother_selfRecording" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="45.894" height="49.571" viewBox="0 0 45.894 49.571">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: url(#linear-gradient);
+      }
+    </style>
+    <linearGradient id="linear-gradient" x1="0.5" x2="0.5" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#ffbdb4"/>
+      <stop offset="1" stop-color="#ff6048"/>
+    </linearGradient>
+  </defs>
+  <path id="路径_3836" data-name="路径 3836" class="cls-1" d="M248.813,265.244a1.946,1.946,0,0,1-.984.544l-7.563,1.555a1.952,1.952,0,0,1-2.311-2.311l1.571-7.563a1.952,1.952,0,0,1,.544-.984l18.606-18.617a5.9,5.9,0,0,0-2.24-.446H229.315a5.932,5.932,0,0,0-5.937,5.937v36.658a5.932,5.932,0,0,0,5.937,5.937h27.121a5.937,5.937,0,0,0,5.937-5.937V251.689Z" transform="translate(-223.378 -236.383)"/>
+  <path id="路径_3837" data-name="路径 3837" class="cls-1" d="M468.746,249.638l1.887-5.573a1.974,1.974,0,0,1,.484-.761l19.253-19.286a1.45,1.45,0,0,1,1.985-.283l3.681,3.686a1.443,1.443,0,0,1-.277,1.985l-19.253,19.3a2,2,0,0,1-.761.478l-5.579,1.876a1.087,1.087,0,0,1-1.419-1.425Z" transform="translate(-450.428 -223.452)"/>
+</svg>

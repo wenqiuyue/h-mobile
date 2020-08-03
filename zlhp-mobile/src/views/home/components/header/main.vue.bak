@@ -1,0 +1,247 @@
+<template>
+	<div :class="classRoot">
+		<div
+			:class="`${classRoot}-switch`"
+			@click="$emit('onToggle')"
+			v-show="switchText"
+		>
+			<svg-icon value="icon-qiehuan" />
+			{{ switchText }}
+		</div>
+		<div :class="`${classRoot}-qr-code`" @click="$emit('onQRCode')">
+			我的二维码
+			<svg-icon value="icon-QRcode_green" />
+		</div>
+		<img :class="`${classRoot}-background`" :src="backgroundImage" alt="" />
+		<van-row :class="`${classRoot}-row`">
+			<van-image round width="5rem" height="5rem" :src="avatar" />
+			<van-col :class="`${classRoot}-row-left`" span="12">
+				<van-notice-bar delay="2">
+					<svg-icon
+						slot="left-icon"
+						v-show="!hideLeftIcon"
+						value="icon-qiehuan"
+						@click.native="$emit('onClickLeft')"
+					/>
+					{{ leftText }}
+				</van-notice-bar>
+			</van-col>
+			<van-col :class="`${classRoot}-row-right`" span="12">
+				<van-notice-bar delay="2">
+					<svg-icon
+						slot="right-icon"
+						v-show="!hideRightIcon"
+						value="icon-qiehuan"
+						@click.native="$emit('onClickRight')"
+					/>
+					{{ rightText }}
+				</van-notice-bar>
+			</van-col>
+		</van-row>
+		<van-count-down :class="`${classRoot}-count-down`" :time="countDown">
+			<template v-slot="timeData">
+				<van-row>
+					<van-col :class="`${classRoot}-count-down-icon`" span="6">
+						<svg-icon value="icon-daojishi" :size="3" />
+					</van-col>
+					<van-col :class="`${classRoot}-count-down-time`" span="18">
+						<b>{{ countDownTitle }}</b>
+						<div>
+							<span class="days">{{ timeData.days }}</span>
+						</div>
+						天
+						<div>
+							<span>{{ timeData.hours }}</span>
+							<span>{{ timeData.minutes }}</span>
+							<span>{{ timeData.seconds }}</span>
+						</div>
+					</van-col>
+				</van-row>
+			</template>
+		</van-count-down>
+	</div>
+</template>
+<script>
+export default {
+	name: 'home-header',
+	props: {
+		// 切换文字
+		switchText: { type: String, default: null },
+		// 头像
+		avatar: { type: String, default: null },
+		// 左侧文字
+		leftText: { type: String, default: null },
+		// 右侧文字
+		rightText: { type: String, default: null },
+		// 隐藏左侧图标
+		hideLeftIcon: { type: Boolean, default: false },
+		// 隐藏右侧图标
+		hideRightIcon: { type: Boolean, default: false },
+		// 倒计时(毫秒数)
+		countDown: { type: Number, default: 0 },
+		// 倒计时标题
+		countDownTitle: { type: String, default: null },
+		// 背景图片
+		backgroundImage: { type: String, default: null }
+	},
+	computed: {
+		classRoot() {
+			return `${process.env.VUE_APP_PREFIX}-${this.$options.name}`;
+		}
+	}
+};
+</script>
+<style lang="less">
+@import '../../../../style/variable.less';
+@inner-prefix: ~'@{prefix}-home-header';
+.@{inner-prefix} {
+	position: relative;
+	height: 13rem;
+	padding-top: 2rem;
+
+	&-switch {
+		position: absolute;
+		top: 1.25rem;
+		left: 0;
+		font-size: 0.85rem;
+		padding: 0 0.5rem;
+		line-height: 2rem;
+		border-radius: 0 5px 5px 0;
+		color: white;
+		background-color: rgba(0, 0, 0, 0.25);
+		z-index: 2;
+
+		svg {
+			vertical-align: middle;
+		}
+	}
+
+	&-background {
+		position: absolute;
+		top: 0;
+		width: 100%;
+		height: 120%;
+	}
+
+	&-qr-code {
+		z-index: 2;
+		position: absolute;
+		top: 5.75rem;
+		right: 0;
+		font-size: 0.85rem;
+		padding: 0 0.5rem;
+		line-height: 2rem;
+		border-radius: 5px 0 0 5px;
+		color: @font-color;
+		background-color: rgba(255, 255, 255, 0.25);
+
+		svg {
+			vertical-align: middle;
+			position: relative;
+			bottom: 0.1rem;
+		}
+	}
+
+	&-row {
+		position: relative;
+		height: 5rem;
+
+		.van-image {
+			position: absolute;
+			left: calc(50% - 2.5rem);
+			top: calc(50% - 2.5rem);
+		}
+
+		@inner-background: #c7e2e0;
+		&-left,
+		&-right {
+			height: 2.5rem;
+			line-height: 2.5rem;
+			background-color: @inner-background;
+			.van-notice-bar {
+				padding: unset;
+				color: @font-color;
+				height: 100%;
+				background-color: unset;
+
+				svg {
+					margin: 0 0.5rem;
+				}
+			}
+		}
+		&-left {
+			padding-right: 2.5rem;
+			margin-top: 2.5rem;
+		}
+		&-right {
+			padding-left: 2.5rem;
+			margin-bottom: 2.5rem;
+		}
+	}
+	&-count-down {
+		padding: 1rem 0;
+		position: relative;
+		height: 2rem;
+		line-height: 2rem;
+		margin-top: 2rem;
+		text-align: center;
+		background: rgba(255, 255, 255, 0.5);
+
+		&-icon {
+			position: relative;
+			bottom: 0.5rem;
+
+			svg {
+				vertical-align: middle;
+			}
+		}
+
+		&-time {
+			b {
+				margin-right: 1rem;
+				font-size: 1rem;
+			}
+
+			div {
+				display: inline-block;
+				line-height: 1.75rem;
+				padding: 0.25rem;
+				border-radius: 0.5rem;
+				text-align: center;
+				color: white;
+				background-color: rgb(126, 220, 179);
+
+				span {
+					display: inline-block;
+					position: relative;
+					min-width: 1.75rem;
+					border-radius: 0.25rem;
+					padding: 0;
+					text-align: center;
+					color: black;
+					background-color: white;
+
+					&.days {
+						font-weight: 600;
+						color: red;
+						text-shadow: 0 0 0.25rem red;
+					}
+
+					&:not(:first-child) {
+						margin-left: 0.5rem;
+
+						&::before {
+							content: ':';
+							position: absolute;
+							left: -0.45rem;
+							bottom: 0.1rem;
+							color: white;
+							font-size: 1.5rem;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+</style>

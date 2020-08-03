@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: rgba(255,255,255,0);
+      }
+
+      .cls-2 {
+        fill: #ad7dfd;
+      }
+
+      .cls-3 {
+        fill: #bd96ff;
+      }
+
+      .cls-4 {
+        fill: #fff;
+      }
+    </style>
+  </defs>
+  <g id="doctor_Curriculum" transform="translate(1231 -10673)">
+    <rect id="矩形_1463" data-name="矩形 1463" class="cls-1" width="48" height="48" transform="translate(-1231 10673)"/>
+    <g id="组_3384" data-name="组 3384" transform="translate(-1263.667 10682)">
+      <path id="路径_4021" data-name="路径 4021" class="cls-2" d="M45.238,0H68.377a2.579,2.579,0,0,1,2.571,2.571v25.71a2.579,2.579,0,0,1-2.571,2.571H45.238a2.579,2.579,0,0,1-2.571-2.571V2.571A2.579,2.579,0,0,1,45.238,0Z"/>
+      <path id="路径_4022" data-name="路径 4022" class="cls-3" d="M629.593,661.4v8.292a2.579,2.579,0,0,1-2.571,2.571h-8.291a8.607,8.607,0,0,1-.064-1.286,9.628,9.628,0,0,1,9.641-9.641A8.624,8.624,0,0,1,629.593,661.4Z" transform="translate(-558.646 -641.408)"/>
+      <path id="路径_4023" data-name="路径 4023" class="cls-4" d="M182.236,0h6.427V12.212l-3.214-1.928-3.214,1.928ZM172.6,24.167a.98.98,0,1,1-1.928,0V7.263a.98.98,0,1,1,1.928,0v16.9Z" transform="translate(-124.144)"/>
+    </g>
+  </g>
+</svg>
