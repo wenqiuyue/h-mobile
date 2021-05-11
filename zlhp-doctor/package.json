@@ -12,7 +12,7 @@
     "@microsoft/signalr": "^3.1.5",
     "axios": "^0.19.2",
     "core-js": "^3.6.4",
-    "lodash": "^4.17.15",
+    "lodash": "^4.17.21",
     "vant": "^2.8.7",
     "vee-validate": "^3.3.0",
     "vue": "^2.6.11",
